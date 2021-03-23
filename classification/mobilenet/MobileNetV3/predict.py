@@ -1,100 +1,85 @@
-import os
-import json
-import numpy as np
-
+import torchvision
+import torchvision.models as models
 import torch
-from PIL import Image
-from torchvision import transforms
-import matplotlib.pyplot as plt
+import torchvision.transforms as transforms
+from label import classes
+import torch.onnx
 
-from mobilenetv3 import mobilenet_v3_large
+import mobilenetv3
+import mobilenetv3_to_onnx
 
-IMAGE_LIST = []
-predict_cla_list = []
-
-DATA_PATH = '../dataset/ILSVRC-2012/val/n01494475'
-# DATA_PATH = '/home/jieliu/workspace/vela_model/dataset/ILSVRC-2012/val/n01440764'
-WEIGHT_PATH = "./weight"
-LABEL_PATH = "/home/jieliu/workspace/vela_model/dataset/ILSVRC-2012/ILSVRC2012_devkit_t12/data/ILSVRC2012_validation_ground_truth.txt"
-
-MOBILENET_LARGE_WEIGHT = os.path.join(
-    WEIGHT_PATH, 'mobilenet_v3_large-8738ca79.pth')
-MOBILENET_SMALL_WEIGHT = os.path.join(
-    WEIGHT_PATH, 'mobilenet_v3_small-047dcff4.pth')
+#ImageNet dataset path
+# DATAPATH = "/home/jieliu/workspace/vela_model/MobileNetV3/dataset/ILSVRC-2012"
+DATAPATH = "/home/jieliu/workspace/vela_model/dataset/ILSVRC-2012"
 
 
-def main():
-    true_num = 0
-    with open(LABEL_PATH, "r") as f:
-        label_list = f.readlines()
-    print(label_list[11233])
+mobilenet_v3_large = mobilenetv3.mobilenet_v3_large(pretrained=True)
+# mobilenet_v3_large.half()
+mobilenet_v3_large.eval()
 
-    for root, dirs, files in os.walk(DATA_PATH):
-        for file in files:
-            if (file.split('.')[-1] == 'JPEG'):
-                filename = os.path.join(root, file)
-                IMAGE_LIST.append(filename)
+def pytorch_to_onnx(model, input_shape, model_name):
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # Input to the model
+    x = torch.randn(input_shape, requires_grad=True)
+    torch_out = mobilenet_v3_large(x)
 
-    data_transform = transforms.Compose(
+    # Export the model
+    torch.onnx.export(  model,                                  # model being run
+                        x,                                      # model input (or a tuple for multiple inputs)
+                        model_name,                             # where to save the model (can be a file or file-like object)
+                        export_params=True,                     # store the trained parameter weights inside the model file
+                        opset_version=9,                        # the ONNX version to export the model to
+                        do_constant_folding=True,               # whether to execute constant folding for optimization
+                        input_names = ['input'],                # the model's input names
+                        output_names = ['output'],              # the model's output names
+                        dynamic_axes={'input' : {0 : '-1'},     # variable lenght axes
+                                      'output' : {0 : '-1'}})
+
+def predict(model, datapath, us_fp16=False):
+    transform = transforms.Compose(
         [transforms.Resize(256),
-         transforms.CenterCrop(224),
-         transforms.ToTensor(),
-         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
 
-    data_transform_gray = transforms.Compose(
-        [transforms.Resize(256),
-         transforms.CenterCrop(224),
-         transforms.ToTensor(),
-         transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+    testset = torchvision.datasets.ImageNet(
+        datapath, "val", download = False, transform=transform)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False, num_workers=2)
 
-    # create model
-    model = mobilenet_v3_large().to(device)
-    # load model weights
-    model_weight_path = MOBILENET_LARGE_WEIGHT
-    model.load_state_dict(torch.load(model_weight_path, map_location=device))
-    model.eval()
-    for IMAGE_PATH in IMAGE_LIST:
-        # load image
-        assert os.path.exists(
-            IMAGE_PATH), "file: '{}' dose not exist.".format(IMAGE_PATH)
-        img = Image.open(IMAGE_PATH)
-        plt.imshow(img)
-        # [N, C, H, W]
-        print(IMAGE_PATH)
-        IMAGE_ID = int(IMAGE_PATH.split('.')[-2].split('_')[-1])
-        if len(np.shape(img)) == 2:
-            img = data_transform_gray(img)
-        elif np.shape(img)[-1] == 4:
-            img = img.convert("RGB")
-            img = data_transform(img)
-        else:
-            img = data_transform(img)
-        # expand batch dimension
-        img = torch.unsqueeze(img, dim=0)
-        with torch.no_grad():
-            # predict class
+    dataiter = iter(testloader)
+    images, labels = dataiter.next()
 
-            # outputs = model(img)
-            # _, predicted=torch.max(outputs.data, 1)
-            # print("pre train value: {}".format(predicted))
+    correct = 0
+    total = 0
 
-            output = torch.squeeze(model(img.to(device))).cpu()
-            predict = torch.softmax(output, dim=0)
-            predict_cla = torch.argmax(predict).numpy()
-            predict_cla_list.append(predict_cla)
-            print("pre train value: {}".format(predict_cla))
-            print("label: {}".format(int(label_list[IMAGE_ID - 1])))
-            # if predict_cla == int(label_list[IMAGE_ID - 1]):
-            #     true_num += 1
+    with torch.no_grad():
+        i = 0
+        for data in testloader:
+            images, labels = data
 
-        # print_res = "class: {}   prob: {:.3}".format(class_indict[str(predict_cla)],
-        #                                              predict[predict_cla].numpy())
-        # plt.title(print_res)
-        # print(print_res)
-        # plt.show()
-    # print("acc is {}".format(true_num / len(predict_cla_list)))
+            if us_fp16:
+                images = images.half()
+
+            outputs = model(images)
+            _, predicted=torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            print('Accuracy of the network on the epoch: %d test images: %d %%' % (i,
+                100 * correct / total))
+            print(correct)
+            i += 1
+            if i == 100:
+                break
+
+    print('Accuracy of the network on the 10000 test images: %d %%' % (
+        100 * correct / total))
+
 if __name__ == '__main__':
-    main()
+
+    #The official implementation of Pythorch for the mobilenet_v3_large
+    # mobilenet_v3_large = models.mobilenet_v3_large(pretrained=True)
+    mobilenet_v3_large = new_new_mobilenetv3.mobilenet_v3_large(pretrained=True)
+    # mobilenet_v3_large.half()
+    mobilenet_v3_large.eval()
+    # pytorch_to_onnx(mobilenet_v3_large, [1, 3, 224, 224], "mobilenet_v3_large_fp32.onnx")
+    predict(mobilenet_v3_large, DATAPATH, False)

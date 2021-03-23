@@ -5,23 +5,9 @@ from torch import nn, Tensor
 from torch.nn import functional as F
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-# from torchvision.models.utils import load_state_dict_from_url
-# from mobilenetv2 import _make_divisible, ConvBNActivation
+from torchvision.models.utils import load_state_dict_from_url
+from torchvision.models.mobilenetv2 import _make_divisible, ConvBNActivation
 
-def _make_divisible(v: float, divisor: int, min_value: Optional[int] = None) -> int:
-    """
-    This function is taken from the original tf repo.
-    It ensures that all layers have a channel number that is divisible by 8
-    It can be seen here:
-    https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet.py
-    """
-    if min_value is None:
-        min_value = divisor
-    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
-    # Make sure that round down does not go down by more than 10%.
-    if new_v < 0.9 * v:
-        new_v += divisor
-    return new_v
 
 __all__ = ["MobileNetV3", "mobilenet_v3_large", "mobilenet_v3_small"]
 
@@ -31,33 +17,6 @@ model_urls = {
     "mobilenet_v3_small": "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth",
 }
 
-class ConvBNActivation(nn.Sequential):
-    def __init__(
-        self,
-        in_planes: int,
-        out_planes: int,
-        kernel_size: int = 3,
-        stride: int = 1,
-        groups: int = 1,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
-        activation_layer: Optional[Callable[..., nn.Module]] = None,
-        dilation: int = 1,
-    ) -> None:
-        padding = (kernel_size - 1) // 2 * dilation
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        if activation_layer is None:
-            activation_layer = nn.ReLU6
-        super(ConvBNReLU, self).__init__(
-            nn.Conv2d(in_planes, out_planes, kernel_size, stride, padding, dilation=dilation, groups=groups,
-                      bias=False),
-            norm_layer(out_planes),
-            activation_layer(inplace=True)
-        )
-        self.out_channels = out_planes
-
-# necessary for backwards compatibility
-ConvBNReLU = ConvBNActivation
 
 class SqueezeExcitation(nn.Module):
 
@@ -284,12 +243,10 @@ def _mobilenet_v3_model(
 ):
     model = MobileNetV3(inverted_residual_setting, last_channel, **kwargs)
     if pretrained:
-        pass
-        #predict to get weight
-        # if model_urls.get(arch, None) is None:
-        #     raise ValueError("No checkpoint is available for model type {}".format(arch))
-        # state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
-        # model.load_state_dict(state_dict)
+        if model_urls.get(arch, None) is None:
+            raise ValueError("No checkpoint is available for model type {}".format(arch))
+        state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
+        model.load_state_dict(state_dict)
     return model
 
 
