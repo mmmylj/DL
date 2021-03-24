@@ -73,11 +73,18 @@ def predict(model, datapath, us_fp16=False):
 
 if __name__ == '__main__':
 
-    # The official implementation of Pythorch for the mobilenet_v3_large
-    # Need torchvision
+    # ImageNet dataset path
+    # DATAPATH = "/home/jieliu/workspace/vela_model/MobileNetV3/dataset/ILSVRC-2012"
+    DATAPATH = "/home/jieliu/workspace/vela_model/dataset/ILSVRC-2012"
+
+    # The official implementation of Pytorch for the mobilenet_v3_large (torchvision >= 0.9.0)
     # mobilenet_v3_large = models.mobilenet_v3_large(pretrained=True)
 
-    mobilenet_v3_large = mobilenetv3_to_onnx.mobilenet_v3_large(pretrained=True)
+    # The official implementation of Pytorch for the mobilenet_v3_large (torchvision < 0.9.0)
+    # mobilenet_v3_large = mobilenetv3.mobilenet_v3_large(pretrained=True)
+
+    mobilenet_v3_large = mobilenetv3_to_onnx.mobilenet_v3_large(
+        pretrained=True)
     # mobilenet_v3_large.half()
     mobilenet_v3_large.eval()
     # pytorch_to_onnx(mobilenet_v3_large, [1, 3, 224, 224], "mobilenet_v3_large_fp32.onnx")
