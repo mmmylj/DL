@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from torchvision.models.utils import load_state_dict_from_url
-from torchvision.models.mobilenetv2 import _make_divisible, ConvBNActivation
+from mobilenetv2 import _make_divisible, ConvBNActivation
 
 
 __all__ = ["MobileNetV3", "mobilenet_v3_large", "mobilenet_v3_small"]
@@ -17,7 +17,7 @@ model_urls = {
     "mobilenet_v3_small": "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth",
 }
 
-# Refine hardsigmoid for onnx
+# Refine hardswish for onnx
 class Hardswish(nn.Module):
     def __init__(self, inplace):
         super().__init__()
@@ -43,7 +43,7 @@ class SqueezeExcitation(nn.Module):
         scale = self.fc2(scale)
         # return F.hardsigmoid(scale, inplace=inplace)
         # Refine hardsigmoid for onnx
-        return scale * (F.hardtanh(scale + 3, 0., 6., inplace=inplace) / 6.)
+        return F.relu6(scale + 3., inplace) / 6.
 
     def forward(self, input: Tensor) -> Tensor:
         scale = self._scale(input, True)

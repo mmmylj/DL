@@ -12,7 +12,7 @@ import mobilenetv3_to_onnx
 # DATAPATH = "/home/jieliu/workspace/vela_model/MobileNetV3/dataset/ILSVRC-2012"
 DATAPATH = "/home/jieliu/workspace/vela_model/dataset/ILSVRC-2012"
 
-
+# /software/topsinference_qa/models/topsinference_test_mobilenet_v3_large_fp32.onnx
 mobilenet_v3_large = mobilenetv3.mobilenet_v3_large(pretrained=True)
 # mobilenet_v3_large.half()
 mobilenet_v3_large.eval()
@@ -66,19 +66,18 @@ def predict(model, datapath, us_fp16=False):
             correct += (predicted == labels).sum().item()
             print('Accuracy of the network on the epoch: %d test images: %d %%' % (i,
                 100 * correct / total))
-            print(correct)
-            i += 1
-            if i == 100:
-                break
 
-    print('Accuracy of the network on the 10000 test images: %d %%' % (
+            i += 1
+    print('Accuracy of the network on the 50000 test images: %d %%' % (
         100 * correct / total))
 
 if __name__ == '__main__':
 
-    #The official implementation of Pythorch for the mobilenet_v3_large
+    # The official implementation of Pythorch for the mobilenet_v3_large
+    # Need torchvision
     # mobilenet_v3_large = models.mobilenet_v3_large(pretrained=True)
-    mobilenet_v3_large = new_new_mobilenetv3.mobilenet_v3_large(pretrained=True)
+
+    mobilenet_v3_large = mobilenetv3_to_onnx.mobilenet_v3_large(pretrained=True)
     # mobilenet_v3_large.half()
     mobilenet_v3_large.eval()
     # pytorch_to_onnx(mobilenet_v3_large, [1, 3, 224, 224], "mobilenet_v3_large_fp32.onnx")
